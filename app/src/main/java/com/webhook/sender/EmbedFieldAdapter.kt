@@ -81,7 +81,7 @@ class EmbedFieldAdapter(
 
         holder.btnRemove.setOnClickListener {
             val pos = holder.bindingAdapterPosition
-            if (pos != RecyclerView.NO_POSITION) {
+            if (pos != RecyclerView.NO_POSITION && pos < fields.size) {
                 fields.removeAt(pos)
                 notifyItemRemoved(pos)
                 notifyItemRangeChanged(pos, fields.size - pos)
