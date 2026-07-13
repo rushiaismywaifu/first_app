@@ -30,6 +30,7 @@ class WebhookApi {
     suspend fun sendWebhook(webhookUrl: String, payload: WebhookPayload): Result<String> {
         return withContext(Dispatchers.IO) {
             try {
+                require(WebhookUrlValidator.isAllowed(webhookUrl)) { "只允許標準 Discord Webhook URL。" }
                 val json = gson.toJson(payload)
                 val body = json.toRequestBody(jsonMediaType)
                 val request = Request.Builder()
@@ -40,26 +41,24 @@ class WebhookApi {
                     .build()
 
                 client.newCall(request).execute().use { response ->
-                    val responseBody = response.body?.string() ?: ""
-
                     when {
                         response.isSuccessful || response.code == 204 -> {
-                            Result.success(if (responseBody.isEmpty()) "訊息已成功發送！" else responseBody)
+                            Result.success("訊息已成功發送！")
                         }
                         response.code == 400 -> {
-                            Result.failure(Exception("發送內容格式錯誤 (HTTP 400)\n詳細資訊: $responseBody"))
+                            Result.failure(Exception("發送內容格式錯誤 (HTTP 400)。"))
                         }
                         response.code == 404 -> {
                             Result.failure(Exception("找不到此 Webhook URL (HTTP 404)\n請檢查 URL 是否正確或該 Webhook 是否已被刪除。"))
                         }
                         response.code == 429 -> {
-                            Result.failure(Exception("遇到 Discord 速率限制 (HTTP 429 Rate Limited)\n請稍後再嘗試發送。\n詳細資訊: $responseBody"))
+                            Result.failure(Exception("遇到 Discord 速率限制 (HTTP 429)，請稍後再嘗試發送。"))
                         }
                         response.code in 500..599 -> {
                             Result.failure(Exception("Discord 伺服器錯誤 (HTTP ${response.code})\n請稍後再試。"))
                         }
                         else -> {
-                            Result.failure(Exception("發送失敗 (HTTP ${response.code}): $responseBody"))
+                            Result.failure(Exception("發送失敗 (HTTP ${response.code})。"))
                         }
                     }
                 }

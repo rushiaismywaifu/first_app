@@ -2,7 +2,6 @@ package com.webhook.sender
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
@@ -24,13 +23,6 @@ class MainActivity : AppCompatActivity() {
     private val webhookApi = WebhookApi()
     private val fieldAdapter = EmbedFieldAdapter(mutableListOf())
 
-    companion object {
-        private const val PREFS_NAME = "WebhookSenderPrefs"
-        private const val KEY_WEBHOOK_URL = "saved_webhook_url"
-        private const val KEY_USERNAME = "saved_username"
-        private const val KEY_AVATAR_URL = "saved_avatar_url"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -38,7 +30,6 @@ class MainActivity : AppCompatActivity() {
 
         setupInsets()
         setupViews()
-        loadSavedData()
     }
 
     private fun setupInsets() {
@@ -88,22 +79,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnClear.setOnClickListener {
             clearForm()
         }
-    }
-
-    private fun loadSavedData() {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        binding.etWebhookUrl.setText(prefs.getString(KEY_WEBHOOK_URL, ""))
-        binding.etUsername.setText(prefs.getString(KEY_USERNAME, ""))
-        binding.etAvatarUrl.setText(prefs.getString(KEY_AVATAR_URL, ""))
-    }
-
-    private fun saveInputData(webhookUrl: String, username: String?, avatarUrl: String?) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString(KEY_WEBHOOK_URL, webhookUrl)
-            .putString(KEY_USERNAME, username ?: "")
-            .putString(KEY_AVATAR_URL, avatarUrl ?: "")
-            .apply()
     }
 
     private fun pasteUrlFromClipboard() {
@@ -257,13 +232,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (!webhookUrl.startsWith("https://discord.com/api/webhooks/") &&
-            !webhookUrl.startsWith("https://discordapp.com/api/webhooks/")) {
+        if (!WebhookUrlValidator.isAllowed(webhookUrl)) {
             MaterialAlertDialogBuilder(this)
-                .setTitle("⚠️ URL 格式確認")
-                .setMessage("您輸入的 URL 似乎不是標準 Discord Webhook 網址 (開頭通常為 https://discord.com/api/webhooks/)。確定要繼續嘗試發送嗎？")
-                .setPositiveButton("繼續發送") { _, _ -> doSend(webhookUrl) }
-                .setNegativeButton("檢查修改", null)
+                .setTitle("⚠️ 無效的 Webhook URL")
+                .setMessage("基於安全考量，只允許 discord.com 或 discordapp.com 的標準 HTTPS Webhook URL。")
+                .setPositiveButton("檢查修改", null)
                 .show()
             return
         }
@@ -273,13 +246,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun doSend(webhookUrl: String) {
         val payload = buildPayload() ?: return
-
-        // Auto save inputs on send attempt
-        saveInputData(
-            webhookUrl = webhookUrl,
-            username = payload.username,
-            avatarUrl = payload.avatarUrl
-        )
 
         setButtonsEnabled(false)
         binding.btnSend.text = "發送中..."
