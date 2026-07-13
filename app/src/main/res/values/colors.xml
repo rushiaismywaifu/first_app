@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Discord Colors -->
+    <color name="discord_blurple">#FF5865F2</color>
+    <color name="discord_green">#FF57F287</color>
+    <color name="discord_yellow">#FFFEE75C</color>
+    <color name="discord_fuchsia">#FFEB459E</color>
+    <color name="discord_red">#FFED4245</color>
+
+    <!-- Dark Theme -->
+    <color name="bg_dark">#FF36393F</color>
+    <color name="card_bg">#FF2F3136</color>
+    <color name="input_bg">#FF40444B</color>
+    <color name="text_primary">#FFDCDDDE</color>
+    <color name="text_secondary">#FF96989D</color>
+    <color name="text_hint">#FF72767D</color>
+
+    <!-- System -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="ic_launcher_background">#FF5865F2</color>
+</resources>

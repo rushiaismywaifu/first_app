@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.WebhookSender" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/discord_blurple</item>
+        <item name="colorPrimaryVariant">@color/discord_blurple</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/discord_green</item>
+        <item name="android:windowBackground">@color/bg_dark</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+        <item name="textInputStyle">@style/Widget.Design.TextInputLayout</item>
+    </style>
+</resources>
