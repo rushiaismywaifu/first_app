@@ -201,7 +201,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            val fields = fieldAdapter.getFields()
+            val fields = fieldAdapter.getFieldEntries()
                 .filter { it.name.trim().isNotEmpty() && it.value.trim().isNotEmpty() }
                 .map { EmbedField(it.name.trim(), it.value.trim(), it.inline) }
                 .ifEmpty { null }
@@ -360,8 +360,7 @@ class MainActivity : AppCompatActivity() {
                 binding.etEmbedAuthorName.text?.clear()
                 binding.etEmbedAuthorUrl.text?.clear()
                 binding.etEmbedAuthorIcon.text?.clear()
-                fieldAdapter.fields.clear()
-                fieldAdapter.notifyDataSetChanged()
+                fieldAdapter.clearFields()
                 Toast.makeText(this, "🗑️ 已清除所有欄位", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("取消", null)

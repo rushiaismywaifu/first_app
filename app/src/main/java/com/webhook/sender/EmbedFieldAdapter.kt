@@ -96,7 +96,12 @@ class EmbedFieldAdapter(
         notifyItemInserted(fields.size - 1)
     }
 
-    fun getFields(): List<FieldEntry> = fields.toList()
+    fun getFieldEntries(): List<FieldEntry> = fields.toList()
+
+    fun clearFields() {
+        fields.clear()
+        notifyDataSetChanged()
+    }
 
     fun updateFromViews(recyclerView: RecyclerView) {
         // With TextWatcher attached, `fields` is always synced in real-time even when scrolled off-screen.
