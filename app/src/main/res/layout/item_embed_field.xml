@@ -40,7 +40,7 @@
             android:src="@android:drawable/ic_delete"
             android:contentDescription="移除欄位"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="@color/discord_red" />
+            app:tint="@color/discord_red" />
     </LinearLayout>
 
     <com.google.android.material.textfield.TextInputEditText
