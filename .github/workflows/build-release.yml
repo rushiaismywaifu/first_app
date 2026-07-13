@@ -1,0 +1,106 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches: [ "main", "arena/*" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: '立即建立或更新 GitHub Release 並上傳 APK？'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      release_tag:
+        description: 'Release 標籤名稱 (例如: v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+        type: string
+
+jobs:
+  build:
+    name: Build & Release Android APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Keystore for Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "🔐 偵測到 GitHub Secrets 生產金鑰，開始解密金鑰設定..."
+            echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+            echo "KEYSTORE_PATH=app/release.jks" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "ℹ️ 未設定自訂金鑰 Secrets，自動產生標準 Debug Keystore 以簽署預設安裝版 Release APK..."
+            mkdir -p ~/.android
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            echo "KEYSTORE_PATH=$HOME/.android/debug.keystore" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=android" >> $GITHUB_ENV
+            echo "KEY_ALIAS=androiddebugkey" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+          fi
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK with ProGuard & R8
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Rename APK for clarity
+        run: |
+          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk
+
+      - name: Upload APK as GitHub Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebhookSender-Release-APK
+          path: app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk
+          if-no-files-found: error
+
+      - name: Publish or Update GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true' || github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="${{ github.event.inputs.release_tag || 'v1.0.0' }}"
+          if [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          fi
+
+          echo "🚀 嘗試上傳 APK 至 Release: ${TAG_NAME}"
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "✅ Release ${TAG_NAME} 已存在，正在上傳或更新 APK 檔案..."
+            gh release upload "${TAG_NAME}" app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk --clobber
+          else
+            echo "ℹ️ Release ${TAG_NAME} 尚未建立，正在自動建立 Release 並上傳 APK..."
+            gh release create "${TAG_NAME}" app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk \
+              --title "🪝 Webhook Sender ${TAG_NAME}" \
+              --notes "## 🪝 Webhook Sender Android App Release (${TAG_NAME})
+
+              本版本由 GitHub Actions 自動編譯與打包，並啟用 ProGuard/R8 最佳化與 APK 簽名。
+              
+              ### 📥 安裝方式
+              1. 點擊下方下載 \`WebhookSender-v1.0.0-release.apk\`
+              2. 於 Android 設備上點擊安裝（若出現「安裝未知來源應用程式」提示，請至手機設定中授權允許即可）" || echo "⚠️ 注意: 如果建立 Release 失敗，請至 Settings -> Actions -> General 確認 Workflow permissions 已勾選 'Read and write permissions'。"
+          fi
