@@ -19,7 +19,7 @@ on:
       release_tag:
         description: 'Release 標籤名稱 (例如: v1.0.0)'
         required: false
-        default: 'v1.0.0'
+        default: 'v1.0.2'
         type: string
 
 jobs:
@@ -59,21 +59,41 @@ jobs:
           echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Ensure Gradle Wrapper exists & grant execute permission
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "ℹ️ gradlew 檔案未存入 Git 倉庫，正在使用 ubuntu-latest 內建 Gradle 自動產生 Wrapper 腳本與 JAR 檔..."
+            gradle wrapper --gradle-version 8.5
+          fi
+          chmod +x gradlew
 
       - name: Build Release APK with ProGuard & R8
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Rename APK for clarity
         run: |
-          mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk
+          TAG_NAME="${{ github.event.inputs.release_tag || 'v1.0.2' }}"
+          if [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "📦 Tag detected: ${TAG_NAME}"
+          SRC_APK="app/build/outputs/apk/release/app-release.apk"
+          DEST_APK="app/build/outputs/apk/release/WebhookSender-${TAG_NAME}-release.apk"
+          if [ -f "$SRC_APK" ]; then
+            mv "$SRC_APK" "$DEST_APK"
+            echo "✅ Renamed APK to $DEST_APK"
+            echo "APK_PATH=$DEST_APK" >> "$GITHUB_ENV"
+          else
+            echo "::error::APK not found at $SRC_APK"
+            ls -R app/build/outputs/
+            exit 1
+          fi
 
       - name: Upload APK as GitHub Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: WebhookSender-Release-APK
-          path: app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk
+          path: app/build/outputs/apk/release/WebhookSender-*-release.apk
           if-no-files-found: error
 
       - name: Publish or Update GitHub Release
@@ -81,24 +101,41 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="${{ github.event.inputs.release_tag || 'v1.0.0' }}"
+          TAG_NAME="${{ github.event.inputs.release_tag || 'v1.0.2' }}"
           if [[ "${{ github.ref }}" =~ ^refs/tags/v ]]; then
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           fi
 
-          echo "🚀 嘗試上傳 APK 至 Release: ${TAG_NAME}"
+          APK_FILE=$(ls app/build/outputs/apk/release/WebhookSender-*-release.apk | head -n1)
+          echo "🚀 嘗試上傳 APK 至 Release: ${TAG_NAME} (file: $APK_FILE)"
+
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
             echo "✅ Release ${TAG_NAME} 已存在，正在上傳或更新 APK 檔案..."
-            gh release upload "${TAG_NAME}" app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk --clobber
+            gh release upload "${TAG_NAME}" "$APK_FILE" --clobber
           else
             echo "ℹ️ Release ${TAG_NAME} 尚未建立，正在自動建立 Release 並上傳 APK..."
-            gh release create "${TAG_NAME}" app/build/outputs/apk/release/WebhookSender-v1.0.0-release.apk \
-              --title "🪝 Webhook Sender ${TAG_NAME}" \
-              --notes "## 🪝 Webhook Sender Android App Release (${TAG_NAME})
+            gh release create "${TAG_NAME}" "$APK_FILE"               --title "🪝 Webhook Sender ${TAG_NAME}"               --notes "## 🪝 Webhook Sender Android App Release (${TAG_NAME})
 
-              本版本由 GitHub Actions 自動編譯與打包，並啟用 ProGuard/R8 最佳化與 APK 簽名。
-              
-              ### 📥 安裝方式
-              1. 點擊下方下載 \`WebhookSender-v1.0.0-release.apk\`
-              2. 於 Android 設備上點擊安裝（若出現「安裝未知來源應用程式」提示，請至手機設定中授權允許即可）" || echo "⚠️ 注意: 如果建立 Release 失敗，請至 Settings -> Actions -> General 確認 Workflow permissions 已勾選 'Read and write permissions'。"
+          本版本由 GitHub Actions 自動編譯與打包，並啟用 ProGuard/R8 最佳化與 APK 簽名，v2+v3 雙簽章。
+
+          ### 📥 安裝方式
+          1. 點擊下方下載 APK (檔名含版本號 ${TAG_NAME})
+          2. 於 Android 設備上點擊安裝（若出現「安裝未知來源應用程式」提示，請至手機設定中授權允許即可）
+
+          ### ⚠️ 重要升級說明 (F-10)
+          - 若您已安裝 **v1.0.0 (debug 簽章版)**，因簽章金鑰已更換為正式 release keystore，無法就地升級，會顯示 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
+          - 請先**解除安裝 v1.0.0**，再安裝本版本 (v1.0.2)。
+          - v1.0.1 與之後版本使用相同 release keystore，可正常就地升級。
+
+          ### 🔐 本版安全強化 (F-05 ~ F-13)
+          - 新增憑證綁定 (Certificate Pinning) 防止中間人攻擊
+          - Webhook URL 輸入框改為密碼遮罩模式 (password_toggle)
+          - 啟用 APK Signature Scheme v3 支援金鑰輪替
+          - 修正 versionCode/versionName 與 tag 一致性，APK 檔名動態化
+          - ProfileInstallReceiver exported 設為 false
+          - 剪貼簿貼上增加 URL 白名單驗證
+
+          ### 🛡️ MASVS 合規
+          - 已通過 OWASP MASVS-L1 大部分檢查，僅憑證綁定為縱深防禦已於此版完成
+          " || echo "⚠️ 注意: 如果建立 Release 失敗，請至 Settings -> Actions -> General 確認 Workflow permissions 已勾選 'Read and write permissions'。"
           fi

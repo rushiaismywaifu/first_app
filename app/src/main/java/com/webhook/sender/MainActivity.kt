@@ -87,6 +87,29 @@ class MainActivity : AppCompatActivity() {
         if (clip != null && clip.itemCount > 0) {
             val pastedText = clip.getItemAt(0).text?.toString()?.trim()
             if (!pastedText.isNullOrEmpty()) {
+                // F-13 fix: validate clipboard content before pasting
+                // Must be https URL and pass WebhookUrlValidator, otherwise show warning
+                if (pastedText.length > 2000) {
+                    Toast.makeText(this, "⚠️ 剪貼簿內容過長，非有效 Webhook URL", Toast.LENGTH_SHORT).show()
+                    return
+                }
+                // Basic https check first for UX
+                if (!pastedText.startsWith("https://")) {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("⚠️ 剪貼簿內容非有效 Webhook URL")
+                        .setMessage("剪貼簿內容不是以 https:// 開頭的 URL，已拒絕貼上。\n\n基於安全考量 (F-13)，僅允許貼上符合 Discord Webhook 格式的連結。\n內容預覽: ${pastedText.take(100)}")
+                        .setPositiveButton("確定", null)
+                        .show()
+                    return
+                }
+                if (!WebhookUrlValidator.isAllowed(pastedText)) {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("⚠️ 剪貼簿內容非有效 Webhook URL")
+                        .setMessage("剪貼簿中的 URL 不符合 Discord Webhook 白名單 (僅允許 discord.com / discordapp.com)。\n為了安全已拒絕自動填入。\n\n內容: ${pastedText.take(200)}")
+                        .setPositiveButton("確定", null)
+                        .show()
+                    return
+                }
                 binding.etWebhookUrl.setText(pastedText)
                 binding.etWebhookUrl.setSelection(pastedText.length)
                 Toast.makeText(this, "📋 已貼上 Webhook URL", Toast.LENGTH_SHORT).show()

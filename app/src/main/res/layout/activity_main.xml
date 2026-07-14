@@ -85,7 +85,9 @@
                     app:boxCornerRadiusTopEnd="8dp"
                     app:boxCornerRadiusBottomStart="8dp"
                     app:boxCornerRadiusBottomEnd="8dp"
-                    app:hintEnabled="false">
+                    app:hintEnabled="false"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/text_secondary">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etWebhookUrl"
@@ -93,10 +95,10 @@
                         android:layout_height="wrap_content"
                         android:hint="https://discord.com/api/webhooks/..."
                         android:textSize="14sp"
-                        android:inputType="textUri"
+                        android:inputType="textPassword"
                         android:textColor="@color/text_primary"
                         android:textColorHint="@color/text_hint"
-                        android:minLines="2"
+                        android:minLines="1"
                         android:gravity="top|start" />
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>

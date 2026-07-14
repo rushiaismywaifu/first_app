@@ -1,6 +1,6 @@
-# 🚀 Android Release APK 自動化建置與簽名指南 (CI/CD Setup)
+# 🚀 Android Release APK 自動化建置與簽名指南 (CI/CD Setup) - v1.0.2 更新版
 
-本指南詳細說明如何透過 GitHub Actions 自動編譯、最佳化 (ProGuard/R8) 及發布簽名版的 `WebhookSender-v1.0.0-release.apk` 至 GitHub Releases。同時詳細列出**所有如有權限問題或需手動操作的部分**。
+本指南詳細說明如何透過 GitHub Actions 自動編譯、最佳化 (ProGuard/R8) 及發布簽名版的 `WebhookSender-v{tag}-release.apk` 至 GitHub Releases。本文件已於 v1.0.2 根據資安審計報告 F-09 進行修正，移除所有關於 Debug 金鑰 fallback 的描述。
 
 ---
 
@@ -28,7 +28,7 @@
   4. 點擊 `Commit changes` 儲存。
 
 ### 步驟 B：開啟 GitHub Actions 的讀寫權限 (Workflow Permissions)
-為了讓 Action 在編譯完 APK 後，能夠自動幫您建立 Release (`v1.0.0`) 並上傳 APK 檔案，需要開啟寫入權限：
+為了讓 Action 在編譯完 APK 後，能夠自動幫您建立 Release 並上傳 APK 檔案，需要開啟寫入權限：
 1. 進入本 GitHub Repository 頁面，點擊上方頁籤的 **`Settings`** (設定)。
 2. 在左側選單中，展開 **`Actions`** 並點選 **`General`**。
 3. 頁面往下滑動到 **`Workflow permissions`** 區塊。
@@ -44,8 +44,8 @@
 
 ### 方式 A：推播或打標籤自動發布 (推薦)
 1. 當有新的 Commit 合併或推播至 `main` 分支時，CI 會自動編譯 Release APK。
-2. 若已存在 `v1.0.0` Release（例如草稿 Release），系統會自動將最新編譯出的 APK 覆蓋或附加到該 Release 頁面中。
-3. 若您推播了新的版本標籤 (例如：`git tag v1.0.1 && git push origin v1.0.1`)，系統會立刻自動建立 `v1.0.1` 的 GitHub Release 並把 APK 附在上頭。
+2. 若已存在對應 tag 的 Release，系統會自動將最新編譯出的 APK 覆蓋或附加到該 Release 頁面中。
+3. 若您推播了新的版本標籤 (例如：`git tag v1.0.2 && git push origin v1.0.2`)，系統會立刻自動建立 `v1.0.2` 的 GitHub Release 並把 APK 附在上頭，APK 檔名為 `WebhookSender-v1.0.2-release.apk` (動態命名，已修復 F-08)。
 
 ### 方式 B：手動觸發打包發布 (Workflow Dispatch)
 1. 點擊 GitHub 頁面上方的 **`Actions`** 頁籤。
@@ -53,37 +53,62 @@
 3. 點擊右側的 **`Run workflow`** 按鈕：
    - 分支選擇 `main`。
    - `立即建立或更新 GitHub Release 並上傳 APK？` 下拉選單選擇 **`true`**。
-   - `Release 標籤名稱` 輸入您想發布的版本號 (例如 `v1.0.0`)。
-4. 點擊綠色的 **`Run workflow`**，等待約 1~2 分鐘編譯完成後，即可至 `Releases` 下載最新打包好的 `WebhookSender-v1.0.0-release.apk`。
+   - `Release 標籤名稱` 輸入您想發布的版本號 (例如 `v1.0.2`)。
+4. 點擊綠色的 **`Run workflow`**，等待約 1~2 分鐘編譯完成後，即可至 `Releases` 下載最新打包好的 APK。
 
 ### 方式 C：從 Artifacts 下載 APK (無需發布 Release)
 每次 Workflow 執行完成後，不論是否建立 Release，都會將打包好的 APK 封裝成 Artifacts。
 - 進入該次 Action 的執行明細頁面，滑到最下方的 **`Artifacts`** 區塊。
-- 點擊下載 **`WebhookSender-Release-APK`** zip 檔，解壓縮即可直接取得 `WebhookSender-v1.0.0-release.apk`。
+- 點擊下載 **`WebhookSender-Release-APK`** zip 檔，解壓縮即可直接取得 APK。
+
+### 版本一致性說明 (F-08 已修復)
+- `app/build.gradle` 中的 `versionCode` 與 `versionName` 已改為與 Git tag 一致 (v1.0.2 => versionCode 2, versionName 1.0.2)
+- CI 中 APK 檔名動態依 tag 命名，不再硬編碼為 `v1.0.0`
+- 發布前請執行檢查清單：
+  - `./gradlew assembleRelease` 在未設定 Secrets 時應失敗 (安全機制)
+  - `androguard sign` 驗證為正式 release keystore
+  - APK 內部 versionName 與 tag 一致
 
 ---
 
-## 🔐 3. APK 數位簽名設定 (進階/自訂金鑰)
+## 🔐 3. APK 數位簽名設定 (必要)
 
-Android 系統強制要求所有安裝的 APK 都必須有數位簽名。我們的 `build.gradle` 與 CI 腳本已設計為雙軌制：
+Android 系統強制要求所有安裝的 APK 都必須有數位簽名。自 **v1.0.1 起，本專案不再提供 Debug 金鑰 fallback** (已修復 F-01)。所有 Release 建置皆需正式生產金鑰，否則 CI 會立即失敗。
 
-### 預設自動簽名機制 (免設定直接可用)
-如果您**尚未**設定自己的正式生產金鑰 (Keystore)，本專案的 CI 腳本與 `app/build.gradle` 預設會自動產生標準 Debug 金鑰為 Release APK 進行簽名 (`assembleRelease`)。
-這保證了產生的 `WebhookSender-v1.0.0-release.apk` 可以直接在您的 Android 手機或模擬器點擊下載並順利安裝測試，不會出現「未簽署應用程式 / 無法安裝」的錯誤提示。
+### 正式生產金鑰（Keystore）簽名步驟（必要）
+本專案不再提供 Debug 金鑰 fallback。發布 Release APK 前必須完成以下 GitHub Secrets 設定，否則 CI 建置將失敗並拋出「Release signing secrets are required; debug signing is not permitted.」。
 
-### 自訂正式生產金鑰 (Keystore) 簽名步驟
-如果您打算發布正式的私鑰簽名 APK 或準備上架 Android 商店，請依循以下步驟設定 GitHub Repository Secrets：
+`app/build.gradle` 中的邏輯：
+```gradle
+if (keystorePath && file(keystorePath).exists() && storePass && alias && keyPass) {
+    storeFile file(keystorePath)
+    storePassword storePass
+    keyAlias alias
+    keyPassword keyPass
+} else if (releaseRequested) {
+    throw new GradleException("Release signing credentials are required; debug-key fallback is disabled.")
+}
+```
+
+#### CI 簽名驗證流程 (`.github/workflows/build-release.yml`)
+```bash
+if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+  echo "::error::Release signing secrets are required. Debug signing is not permitted."
+  exit 1
+fi
+```
+
+此設計確保：
+1. 不會意外發布以 Android Debug 金鑰簽署的 Release APK (F-01)
+2. 供應鏈安全：任何人無法以公開的 debug key 重製相同簽章的惡意 APK 進行升級攻擊
 
 #### 步驟 (1)：在本地端建立 Keystore 金鑰檔案
-打開命令提示字元 (終端機)，執行以下指令建立 `release.jks` 金鑰：
 ```bash
-keytool -genkey -v -keystore release.jks -storepass YOUR_STORE_PASSWORD -alias YOUR_KEY_ALIAS -keypass YOUR_KEY_PASSWORD -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Your Name,O=Your Org,C=TW"
+keytool -genkey -v -keystore release.jks -storepass YOUR_STORE_PASSWORD -alias YOUR_KEY_ALIAS -keypass YOUR_KEY_PASSWORD -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Developer,O=Dev,L=Taipei,ST=Taiwan,C=TW"
 ```
-> *(請將 `YOUR_STORE_PASSWORD`、`YOUR_KEY_ALIAS`、`YOUR_KEY_PASSWORD` 替換為您的密碼與名稱並妥善保存)*
 
 #### 步驟 (2)：將金鑰轉換為 Base64 字串
-為了在 CI/CD 中安全存放金鑰檔案，需將其轉為 Base64 字串：
-- **Linux / macOS 終端機**：
+- **Linux / macOS**：
   ```bash
   base64 -w 0 release.jks > keystore_base64.txt
   ```
@@ -97,9 +122,53 @@ keytool -genkey -v -keystore release.jks -storepass YOUR_STORE_PASSWORD -alias Y
 2. 點擊 **`New repository secret`**，依序新增以下 4 個 Secret：
    | Secret 名稱 | 填入內容 |
    | :--- | :--- |
-   | **`KEYSTORE_BASE64`** | 步驟 (2) 產生的 `keystore_base64.txt` 檔案內所有文字 |
-   | **`STORE_PASSWORD`** | 步驟 (1) 設定的 `storepass` 密碼 |
-   | **`KEY_ALIAS`** | 步驟 (1) 設定的 `alias` 金鑰別名 |
-   | **`KEY_PASSWORD`** | 步驟 (1) 設定的 `keypass` 密碼 |
+   | **`KEYSTORE_BASE64`** | 步驟 (2) 產生的檔案內所有文字 |
+   | **`STORE_PASSWORD`** | storepass 密碼 |
+   | **`KEY_ALIAS`** | key alias |
+   | **`KEY_PASSWORD`** | keypass 密碼 |
 
-> 完成上述 Actions Secrets 設定後，下次 CI 執行時會自動偵測並解密 `KEYSTORE_BASE64`，使用您的專屬生產金鑰為 Release APK 進行數位簽名！
+#### 簽章版本 (F-07 已修復)
+`app/build.gradle` 已啟用：
+- `v1SigningEnabled false` (停用易受攻擊的 v1)
+- `v2SigningEnabled true`
+- `v3SigningEnabled true` (支援金鑰輪替 lineage)
+
+---
+
+## 🛡️ 4. 安全設定總覽 (v1.0.2)
+
+| 項目 | 設定 | 對應漏洞 |
+| --- | --- | --- |
+| allowBackup | `false` | F-02 |
+| SharedPreferences 儲存 Webhook URL | 已移除 (不持久化) | F-02 |
+| networkSecurityConfig | 僅信任系統 CA | F-05 前置 |
+| CertificatePinner | 綁定 discord.com / discordapp.com SPKI | F-05 |
+| Webhook URL 驗證 | `WebhookUrlValidator` 嚴格正則 + 無繞過 | F-03 |
+| 錯誤訊息 | 固定字串，不洩漏 response body | F-04 |
+| InputType | `textPassword` + `password_toggle` | F-06 |
+| 剪貼簿 | 驗證白名單後才貼上 | F-13 |
+| ProfileInstallReceiver | exported=false override | F-11 |
+
+---
+
+## ⚠️ 5. 已知不相容性 (F-10)
+
+- **v1.0.0 為 Android Debug 金鑰簽署**，屬於極高風險版本，已不應使用
+- v1.0.1 起改用正式 release keystore，金鑰不同故無法就地升級
+- 若使用者已安裝 v1.0.0，需先解除安裝再安裝 v1.0.1+，並在 Release Notes 明確標示
+- 未來金鑰輪替請使用 v3 簽章的 lineage 機制，避免再次發生
+
+建議在 GitHub Release 頁面將 v1.0.0 標記為「⚠️ 不安全，請勿使用」或直接刪除。
+
+---
+
+## 📋 6. 發布前檢查清單 (來自報告 15.1)
+
+- [ ] `./gradlew assembleRelease` 在未設定 Secrets 時應失敗
+- [ ] `androguard sign` 驗證憑證為 release keystore (非 Android Debug)
+- [ ] `androguard axml` 驗證 `allowBackup=false`、有 `networkSecurityConfig`
+- [ ] APK 內部 `versionCode`/`versionName` 與 Git tag 一致 (例如 tag v1.0.2 => versionCode 2 / versionName 1.0.2)
+- [ ] APK 檔名包含正確版本號 (如 `WebhookSender-v1.0.2-release.apk`)
+- [ ] `apktool` 反編譯確認 DEX 中不存在 `WebhookSenderPrefs`、`saved_webhook_url`
+- [ ] 已更新 README 與此文件，移除所有提及 debug fallback 的內容
+- [ ] Release Notes 說明與前版本的金鑰相容性 (F-10)
