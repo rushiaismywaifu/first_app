@@ -28,6 +28,11 @@ android {
                 storePassword storePass
                 keyAlias alias
                 keyPassword keyPass
+                // F-07: AGP 8.2 signing config - disable v1 (vulnerable), enable v2+v3 for key rotation
+                v1SigningEnabled false
+                v2SigningEnabled true
+                enableV3Signing = true
+                enableV4Signing = true
             } else if (releaseRequested) {
                 throw new GradleException("Release signing credentials are required; debug-key fallback is disabled.")
             }
@@ -39,9 +44,6 @@ android {
             signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
-            v1SigningEnabled false
-            v2SigningEnabled true
-            v3SigningEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
