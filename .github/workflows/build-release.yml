@@ -59,8 +59,13 @@ jobs:
           echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Ensure Gradle Wrapper exists & grant execute permission
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "ℹ️ gradlew 檔案未存入 Git 倉庫，正在使用 ubuntu-latest 內建 Gradle 自動產生 Wrapper 腳本與 JAR 檔..."
+            gradle wrapper --gradle-version 8.5
+          fi
+          chmod +x gradlew
 
       - name: Build Release APK with ProGuard & R8
         run: ./gradlew assembleRelease --stacktrace
